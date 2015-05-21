@@ -19,6 +19,7 @@
 
 namespace Doctrine\DBAL;
 
+use Doctrine\DBAL\Driver\PingableConnection;
 use PDO, Closure, Exception,
     Doctrine\DBAL\Types\Type,
     Doctrine\DBAL\Driver\Connection as DriverConnection,
@@ -339,7 +340,7 @@ class Connection implements DriverConnection
      */
     public function connect()
     {
-        if ($this->_isConnected) return false;
+        if ($this->_isConnected && $this->ping()) return false;
 
         $driverOptions = isset($this->_params['driverOptions']) ?
                 $this->_params['driverOptions'] : array();
@@ -729,7 +730,7 @@ class Connection implements DriverConnection
      */
     public function query()
     {
-        $this->connect();
+		$this->connect();
 
         $args = func_get_args();
 
@@ -752,6 +753,31 @@ class Connection implements DriverConnection
 
         return $statement;
     }
+
+
+	/**
+	 * Executes an SQL statement, returning a result set as a Statement object.
+	 *
+	 * @param string $statement
+	 * @param integer $fetchType
+	 * @return \Doctrine\DBAL\Driver\Statement
+	 */
+	public function queryNoConnect()
+	{
+
+		$args = func_get_args();
+error_log('ergwergerger');
+		try {
+			$statement = call_user_func_array(array($this->_conn, 'query'), $args);
+		} catch (\Exception $ex) {
+			throw DBALException::driverExceptionDuringQuery($ex, func_get_arg(0));
+		}
+
+		$statement->setFetchMode($this->_defaultFetchMode);
+
+		return $statement;
+	}
+
 
     /**
      * Executes an SQL INSERT/UPDATE/DELETE query with the given parameters
@@ -1305,4 +1331,44 @@ class Connection implements DriverConnection
     {
         return new Query\QueryBuilder($this);
     }
+
+
+    /**
+     * Ping the server
+     *
+     * When the server is not available the method returns FALSE.
+     * It is responsibility of the developer to handle this case
+     * and abort the request or reconnect manually:
+     *
+     * @example
+     *
+     *   if ($conn->ping() === false) {
+     *      $conn->close();
+     *      $conn->connect();
+     *   }
+     *
+     * It is undefined if the underlying driver attempts to reconnect
+     * or disconnect when the connection is not available anymore
+     * as long it returns TRUE when a reconnect succeeded and
+     * FALSE when the connection was dropped.
+     *
+     * @return bool
+     */
+    public function ping()
+    {
+        #$this->connect();
+
+        if ($this->_conn instanceof PingableConnection) {
+            return $this->_conn->ping();
+        }
+
+        try {
+            $this->queryNoConnect('SELECT 1');
+
+            return true;
+        } catch (DBALException $e) {
+            return false;
+        }
+    }
+
 }
