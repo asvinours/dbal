@@ -766,7 +766,6 @@ class Connection implements DriverConnection
 	{
 
 		$args = func_get_args();
-error_log('ergwergerger');
 		try {
 			$statement = call_user_func_array(array($this->_conn, 'query'), $args);
 		} catch (\Exception $ex) {
